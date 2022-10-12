@@ -12,6 +12,8 @@ requires = [
     "sklearn",
     "sortedcontainers",
     "gmpy2",
-    "matplotlib"
+    "matplotlib",
+    "tqdm",
+    "timbertrek"
 ]
 build-backend = "setuptools.build_meta"

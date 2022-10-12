@@ -1,6 +1,9 @@
 #ifndef DATASET_H
 #define DATASET_H
 
+#define CL_SILENCE_DEPRECATION
+#define __CL_ENABLE_EXCEPTIONS
+
 #include <iostream>
 #include <sstream>
 #include <math.h>
@@ -13,6 +16,10 @@
 #include <tbb/concurrent_hash_map.h>
 #include <tbb/scalable_allocator.h>
 
+#ifdef INCLUDE_OPENCL
+#include <opencl/cl.hpp>
+#endif
+
 #include <json/json.hpp>
 #include <csv/csv.h>
 
@@ -24,7 +31,6 @@ class Dataset;
 #include "index.hpp"
 //#include "state.hpp" // FIREWOLF: Circular References: Moved to cpp.
 #include "tile.hpp"
-#include "reference.hpp"
 
 using json = nlohmann::json;
 
@@ -59,12 +65,14 @@ public:
     // @param id: Index of the local state entry used when a column buffer is needed
     // @modifies info: The alkaike information critierion of this set w.r.t the target distribution
     // @modifies potential: The maximum reduction in loss if all equivalent classes are relabelled (without considering complexity penalty)
-    // @modifies min_loss: an estimate of the minimal loss we could incur, without considering complexity penalty 
-    //                     (estimated if Configuration:reference_LB is true, else matches guaranteed_min_loss) 
-    // @modifies guaranteed_min_loss: The minimal loss incurred if all equivalent classes are optimally labelled without considering complexity penalty
+    // @modifies min_loss: The minimal loss incurred if all equivalent classes are optimally labelled without considering complexity penalty
     // @modifies max_loss: The loss incurred if the capture set is left unsplit and the best single label is chosen
     // @modifies target_index: The label to choose if left unsplit
-    void summary(Bitmask const & capture_set, float & info, float & potential, float & min_loss, float & guaranteed_min_loss, float & max_loss, unsigned int & target_index, unsigned int id) const;
+    void summary(Bitmask const & capture_set, float & info, float & potential, float & min_loss, float & max_loss, unsigned int & target_index, unsigned int id) const;
+    
+    void get_TP_TN(Bitmask const & capture_set, unsigned int id, unsigned int target_index, unsigned int & TP, unsigned int & TN);
+    
+    void get_total_P_N(unsigned int & P, unsigned int & N);
 
     // @param feature_index: the index of the binary feature to use bisect the set
     // @param positive: if true, modifies set to reflect the part of the bisection that responds positive to the binary feature
@@ -84,6 +92,8 @@ public:
     float distance(Bitmask const & set, unsigned int i, unsigned int j, unsigned int id) const;
 
     void tile(Bitmask const & filter, Bitmask const & selector, Tile & tile_output, std::vector< int > & order, unsigned int id) const;
+    
+    float get_mismatch_cost() const;
 
 private:
     static bool index_comparator(const std::pair< unsigned int, unsigned int > & left, const std::pair< unsigned int, unsigned int > & right);

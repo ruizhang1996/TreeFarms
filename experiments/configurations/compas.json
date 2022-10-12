@@ -1,7 +1,0 @@
-{
-    "regularization": 0.01,
-    "depth_budget": 4,
-    "time_limit": 60,
-    "verbose": true,
-    "similar_support": false
-}

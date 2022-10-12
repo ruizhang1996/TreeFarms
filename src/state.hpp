@@ -30,6 +30,8 @@ public:
 
     static void initialize(std::istream & data_source, unsigned int workers = 1);
     static void reset(void);
+    static void reset_except_dataset(void);
+
 };
 
 #endif

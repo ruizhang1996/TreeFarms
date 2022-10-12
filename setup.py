@@ -17,14 +17,14 @@ if platform.system() == "Windows" or (platform.system() == "Linux" and distro.id
 print("Additional CMake Arguments = {}".format(cmake_args))
 
 setup(
-    name="gosdt",
-    version="0.1.7",
-    description="Implementation of General Optimal Sparse Decision Tree",
+    name="treefarms",
+    version="0.1.0",
+    description="Implementation of Trees FAst RashoMon Sets",
     author="UBC Systopia Research Lab",
-    url="https://github.com/ubc-systopia/gosdt-guesses",
+    url="https://github.com/ubc-systopia/treeFarms",
     license="BSD 3-Clause",
     packages=find_packages(where='.'),
-    cmake_install_dir="gosdt",
+    cmake_install_dir="treefarms",
     cmake_args=cmake_args,
     python_requires=">=3.7",
     long_description=pathlib.Path("README_PyPI.md").read_text(encoding="utf-8"),
@@ -38,5 +38,7 @@ setup(
                       "sklearn",
                       "sortedcontainers",
                       "gmpy2",
-                      "matplotlib"]
+                      "matplotlib",
+                      "tqdm",
+                      "timbertrek"]
 )

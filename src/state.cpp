@@ -16,9 +16,18 @@ void State::initialize(std::istream & data_source, unsigned int workers) {
     }
 }
 
+
 void State::reset(void) {
     State::graph = Graph();
     State::queue = Queue();
     State::locals.clear();
     State::dataset.clear();
+}
+
+void State::reset_except_dataset(void) {
+    State::graph = Graph();
+    State::queue = Queue();
+    for (unsigned int i = 0; i < locals.size(); ++i) {
+        State::locals[i].initialize(dataset.height(), dataset.width(), dataset.depth());
+    }
 }

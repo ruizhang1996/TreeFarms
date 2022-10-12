@@ -1,10 +1,6 @@
 #ifndef GRAPH_H
 #define GRAPH_H
 
-#include "bitmask.hpp"
-#include "task.hpp"
-#include "tile.hpp"
-
 #include <iostream>
 #include <utility>
 #include <vector>
@@ -13,10 +9,19 @@
 #include <tbb/concurrent_hash_map.h>
 #include <tbb/concurrent_unordered_map.h>
 #include <tbb/concurrent_vector.h>
+#include <tbb/concurrent_unordered_set.h>
 #include <tbb/scalable_allocator.h>
 
-//class Graph;
+class Graph;
 
+#include "bitmask.hpp"
+#include "task.hpp"
+#include "tile.hpp"
+#include "additive_metrics.hpp"
+
+// #include "sorted_map.hpp"
+
+class ModelSet;
 typedef Tile key_type;
 typedef Task value_type;
 typedef std::vector<int> translation_type;
@@ -57,6 +62,7 @@ public:
     }
 };
 
+
 typedef tbb::concurrent_hash_map< // Table for storing forward edges
     std::pair<key_type, int>, key_type, GraphChildHashComparator, 
     tbb::scalable_allocator<std::pair<std::pair<key_type, int> const, key_type>>> child_table;
@@ -79,9 +85,19 @@ typedef tbb::concurrent_hash_map< // Table of all adjacency sets
 
 typedef tbb::concurrent_vector<std::tuple<unsigned int, float, float>, tbb::scalable_allocator<std::tuple<unsigned int, float, float>>> bound_list; // List of split-bounds for a single vertex
 
+// A collection of model sets, representing the result or solution of a
+// subproblem. The first entry is a *sorted* list of objective values whereas
+// the second entry represents a storage 
+typedef std::pair<std::set<Objective, ObjectiveLess>, std::unordered_map<Objective, std::shared_ptr<ModelSet>, ObjectiveHash>> results_t; 
+typedef std::tuple< float, results_t > scoped_result_t; // A collection of model sets with an associated scope
+
 typedef tbb::concurrent_hash_map< // Table of all bound lists
     key_type, bound_list, GraphVertexHashComparator, 
     tbb::scalable_allocator<std::pair<key_type const, bound_list>>> bound_table;
+
+typedef tbb::concurrent_hash_map< // Table of all saved models
+    key_type, scoped_result_t, GraphVertexHashComparator, 
+    tbb::scalable_allocator<std::pair<key_type const, scoped_result_t>>> models_table;
 
 typedef vertex_table::const_accessor const_vertex_accessor;
 typedef vertex_table::accessor vertex_accessor;
@@ -107,6 +123,9 @@ typedef bound_table::accessor bound_accessor;
 typedef bound_list::const_iterator const_bound_iterator;
 typedef bound_list::iterator bound_iterator;
 
+typedef models_table::const_accessor const_models_accessor;
+typedef models_table::accessor models_accessor;
+
 // Container for storing the dependency graph
 // The vertices of his graph act as a memoization table of subproblems
 // Entries in the table are not necessarily complete, some are still running, paused, or cancelled.
@@ -117,6 +136,7 @@ public:
     vertex_table vertices;
     adjacency_table edges;
     bound_table bounds;
+    models_table models;
 
     Graph(void);
     ~Graph(void);

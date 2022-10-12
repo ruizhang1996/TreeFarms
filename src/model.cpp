@@ -4,9 +4,9 @@ Model::Model(void) {}
 
 Model::Model(std::shared_ptr<Bitmask> capture_set) {
     std::string prediction_name, prediction_type, prediction_value;
-    float info, potential, min_loss, guaranteed_min_loss, max_loss;
+    float info, potential, min_loss, max_loss;
     unsigned int target_index;
-    State::dataset.summary(* capture_set, info, potential, min_loss, guaranteed_min_loss, max_loss, target_index, 0);
+    State::dataset.summary(* capture_set, info, potential, min_loss, max_loss, target_index, 0);
     State::dataset.encoder.target_value(target_index, prediction_value);
     State::dataset.encoder.header(prediction_name);
     State::dataset.encoder.target_type(prediction_type);
@@ -97,57 +97,65 @@ void Model::partitions(std::vector< Bitmask * > & sorted_addresses) const {
     return;
 };
 
-size_t const Model::hash(void) const {
-    // std::cout << "hash functiion entry" << std::endl;
+size_t Model::hash(void) const {
+    if (_hash) return _hash;
 
-    std::vector< Bitmask * > addresses;
-    partitions(addresses);
-    size_t seed = addresses.size();
-    // std::cout << "final partition size: " << addresses.size() << std::endl;
-    for (auto it = addresses.begin(); it != addresses.end(); ++it) {
-        // std::cout << "partition: " << (**it).to_string() << std::endl;
-        seed ^=  ((**it).hash()) + 0x9e3779b9 + (seed<<6) + (seed>>2);
+    size_t seed = 0;
+    if (this -> terminal) {
+        seed = capture_set.get()->hash();
+    } else {
+        seed ^= get_feature() * 0x9e3779b9 + (seed<<6) + (seed>>2);
+        seed ^= positive->hash() + 0x9e3779b9 + (seed<<6) + (seed>>2);
+        seed ^= negative->hash() + 0x9e3779b9 + (seed<<6) + (seed>>2);
     }
-    // std::cout << "hash: " << seed << std::endl;
+    _hash = seed;
     return seed;
 }
 
-bool const Model::operator==(Model const & other) const {
+bool Model::operator==(Model const & other) const {
     if (hash() != other.hash()) {
         return false;
     } else {
-        std::vector< Bitmask * > masks;
-        std::vector< Bitmask * > other_masks;
-        partitions(masks);
-        other.partitions(other_masks);
-        if (masks.size() != other_masks.size()) { return false; }
-        auto iterator = masks.begin();
-        auto other_iterator = other_masks.begin();
-        while (iterator != masks.end() && other_iterator != other_masks.end()) {
-            if ((** iterator) != (** other_iterator)) { return false; }
-            ++iterator;
-            ++other_iterator;
+        if (terminal != other.terminal) {
+            return false;
+        } else if (terminal) {
+            return get_binary_target() == other.get_binary_target();
+        } else if (get_feature() != other.get_feature()) {
+            return false;
+        } else {
+            return (*negative == *other.negative) && (*positive == *other.positive);
         }
-        return true;
     }
 }
 
 float Model::loss(void) const {
+    if (cached_loss >= 0) {
+        return cached_loss;
+    }
+    float loss;
     // Currently a stub, need to implement
     if (this -> terminal) {
-        return this -> _loss;
+        loss = this -> _loss;
     } else {
-        return this -> negative -> loss() + this -> positive -> loss();
+        loss = this -> negative -> loss() + this -> positive -> loss();
     }
+    cached_loss = loss;
+    return loss;
 }
 
 float Model::complexity(void) const {
+    if (cached_complexity >= 0) {
+        return cached_complexity;
+    }
+    float complexity;
     // Currently a stub, need to implement
     if (this -> terminal) {
-        return this -> _complexity;
+        complexity = this -> _complexity;
     } else {
-        return this -> negative -> complexity() + this -> positive -> complexity();
+        complexity = this -> negative -> complexity() + this -> positive -> complexity();
     }
+    cached_complexity = complexity;
+    return complexity;
 }
 
 void Model::predict(Bitmask const & sample, std::string & prediction) const {
@@ -239,6 +247,7 @@ void Model::summarize(json & node) const {
 
 void Model::to_json(json & node) const {
     _to_json(node);
+    node["model_objective"] = loss() + complexity();
     decode_json(node);
     // Convert to N-ary
     if (Configuration::non_binary) { summarize(node); }

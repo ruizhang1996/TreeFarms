@@ -170,7 +170,7 @@ jobs:
                   python3 -c "import sys; exit(not (sys.version_info.major == 3 and sys.version_info.minor == 7))"
                   pip3 install attrs packaging editables pandas sklearn sortedcontainers gmpy2 matplotlib
                   python3 -c "import os; import subprocess; exit(subprocess.run(['pip3', 'install', 'dist/{}'.format(os.listdir('dist')[0])]).returncode)"
-                  python3 gosdt/example.py
+                  python3 treefarms/example.py
             # Python 3.8: Run the sample experiment
             # Windows Builds: Run if and only if the wheel is built by Python 3.8.
             - name: Install the GOSDT Python module and run the sample experiment (Python 3.8 - Step 1)
@@ -183,7 +183,7 @@ jobs:
                   python3 -c "import sys; exit(not (sys.version_info.major == 3 and sys.version_info.minor == 8))"
                   pip3 install attrs packaging editables pandas sklearn sortedcontainers gmpy2 matplotlib
                   python3 -c "import os; import subprocess; exit(subprocess.run(['pip3', 'install', 'dist/{}'.format(os.listdir('dist')[0])]).returncode)"
-                  python3 gosdt/example.py
+                  python3 treefarms/example.py
             # Python 3.9: Run the sample experiment
             # Windows Builds: Run if and only if the wheel is built by Python 3.9.
             - name: Install the GOSDT Python module and run the sample experiment (Python 3.9 - Step 1)
@@ -196,7 +196,7 @@ jobs:
                   python3 -c "import sys; exit(not (sys.version_info.major == 3 and sys.version_info.minor == 9))"
                   pip3 install attrs packaging editables pandas sklearn sortedcontainers gmpy2 matplotlib
                   python3 -c "import os; import subprocess; exit(subprocess.run(['pip3', 'install', 'dist/{}'.format(os.listdir('dist')[0])]).returncode)"
-                  python3 gosdt/example.py
+                  python3 treefarms/example.py
             # Python 3.10: Run the sample experiment
             # Windows Builds: Run if and only if the wheel is built by Python 3.10.
             - name: Install the GOSDT Python module and run the sample experiment (Python 3.10 - Step 1)
@@ -209,7 +209,7 @@ jobs:
                   python3 -c "import sys; exit(not (sys.version_info.major == 3 and sys.version_info.minor == 10))"
                   pip3 install attrs packaging editables pandas sklearn sortedcontainers gmpy2 matplotlib
                   python3 -c "import os; import subprocess; exit(subprocess.run(['pip3', 'install', 'dist/{}'.format(os.listdir('dist')[0])]).returncode)"
-                  python3 gosdt/example.py
+                  python3 treefarms/example.py
             # Upload the wheel file
             - name: Upload the wheel file
               uses: actions/upload-artifact@v2

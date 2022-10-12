@@ -36,14 +36,12 @@ bool standard_input = false;
 		std::cout << "Generalized Optimal Sparse Decision Tree" << std::endl;
 		std::cout << "Using data set: " << argv[1] << std::endl;
 	}
-	std::string result;
 	GOSDT model;
 	if (standard_input) {
-		model.fit(std::cin, result);
+		model.fit(std::cin);
 	} else {
 		std::ifstream data(argv[1]);
-		model.fit(data, result);
+		model.fit(data);
 	}
-	if (Configuration::model == "" || Configuration::verbose) { std::cout << result << std::endl; }
 	return 0;
 }

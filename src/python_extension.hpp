@@ -8,4 +8,3 @@
 #include <string>
 
 #include "gosdt.hpp"
-#include "version.hpp"

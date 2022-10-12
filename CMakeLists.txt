@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.10)
 
 # Project `Name` and `Language`
-project(GOSDT)
+project(TREEFARMS)
 
 # Set the language standard to `c++11`
 set(CMAKE_CXX_STANDARD 11)
@@ -33,17 +33,17 @@ endif()
 #
 
 # Target Definition
-set(TARGET_CLI "gosdt")
-set(TARGET_TESTS "gosdt_tests")
+set(TARGET_CLI "treefarms")
+set(TARGET_TESTS "treefarms_tests")
 set(TARGET_PYTHON "libgosdt")
 
-# Target: GOSDT CLI
+# Target: TREEFARMS CLI
 file(GLOB_RECURSE SOURCE_FILES_CLI src/*.cpp)
 list(REMOVE_ITEM SOURCE_FILES_CLI "${CMAKE_SOURCE_DIR}/src/python_extension.cpp")
 add_executable(${TARGET_CLI} ${SOURCE_FILES_CLI})
 target_include_directories(${TARGET_CLI} PUBLIC ${CMAKE_SOURCE_DIR}/include)
 
-# Target: GOSDT Tests
+# Target: TREEFARMS Tests
 file(GLOB_RECURSE SOURCE_FILES_TESTS src/*.cpp)
 list(REMOVE_ITEM SOURCE_FILES_TESTS "${CMAKE_SOURCE_DIR}/src/python_extension.cpp")
 list(REMOVE_ITEM SOURCE_FILES_TESTS "${CMAKE_SOURCE_DIR}/src/main.cpp")
@@ -77,9 +77,9 @@ find_package(Threads REQUIRED)
 target_link_libraries(${TARGET_CLI} PRIVATE Threads::Threads)
 target_link_libraries(${TARGET_TESTS} PRIVATE Threads::Threads)
 
-# Target: GOSDT Python Module
+# Target: TREEFARMS Python Module
 if (SKBUILD)
-    message(STATUS "GOSDT is built using scikit-build. Will build the Python module.")
+    message(STATUS "TREEFARMS is built using scikit-build. Will build the Python module.")
     # Find the Python 3 development environment
     if (NOT DEFINED Python3_INCLUDE_DIR)
         message(FATAL_ERROR "The CMake variable Python3_INCLUDE_DIR should have been defined by scikit-build.")

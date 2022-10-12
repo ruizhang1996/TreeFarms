@@ -8,10 +8,16 @@ bool Optimizer::dispatch(Message const & message, unsigned int id) {
             Bitmask const & capture_set = message.recipient_capture; // The points captured
             Bitmask const & feature_set = message.recipient_feature; // The features (before pruning)
             bool is_root = capture_set.count() == capture_set.size();
-            Task task(capture_set, feature_set, id); // A vertex to represent the problem
+            Task task(capture_set, feature_set, id, rashomon_flag); // A vertex to represent the problem
+
+            if (this -> rashomon_flag) { // Extract Rashomon set
+                task.set_rashomon_flag();
+                task.set_rashomon_bound(this -> rashomon_bound);
+            }
+
             task.scope(message.scope);
             task.create_children(id); // Populate the thread's local cache with child instances
-            if (Configuration::feature_exchange || Configuration::continuous_feature_exchange) { task.prune_features(id); } // Prune using a set of bounds
+            task.prune_features(id);  // Prune using a set of bounds
             translation_type order;
             State::dataset.tile(task.capture_set(), task.feature_set(), task.identifier(), task.order(), id);
 
@@ -36,7 +42,7 @@ bool Optimizer::dispatch(Message const & message, unsigned int id) {
                 signal_exploiters(parents, vertex -> second, id);
             }
 
-            if (Configuration::reference_LB || message.scope >= vertex -> second.upperscope()) {
+            if (message.scope >= vertex -> second.upperscope()) {
                 vertex -> second.send_explorers(message.scope, id);
             }
 
@@ -48,7 +54,16 @@ bool Optimizer::dispatch(Message const & message, unsigned int id) {
 
             load_self(identifier, vertex);
 
-            if (vertex -> second.uncertainty() == 0 || (!Configuration::reference_LB && vertex -> second.lowerbound() >= vertex -> second.upperscope() - std::numeric_limits<float>::epsilon())) { break; }
+
+            // if (this->rashomon_flag) {
+            //     if (vertex -> second.uncertainty() == 0 || vertex -> second.lowerbound() >= vertex -> second.rashomon_bound() - std::numeric_limits<float>::epsilon()) { break; }
+            // } 
+            // else { 
+            //     if (vertex -> second.uncertainty() == 0 || vertex -> second.lowerbound() >= vertex -> second.upperscope() - std::numeric_limits<float>::epsilon()) { break; } 
+            // }
+            if (vertex -> second.uncertainty() == 0 || vertex -> second.lowerbound() >= vertex -> second.upperscope() - std::numeric_limits<float>::epsilon()) { break; } 
+           
+
             bool update = load_children(vertex -> second, message.features, id);
 
             // if (!update) { break; } // XXX Please check if this check still applies 
@@ -150,8 +165,13 @@ bool Optimizer::load_children(Task & task, Bitmask const & signals, unsigned int
                 }
             }            
         }
-
-        if (std::get<1>(* iterator) > task.upperscope()) { continue; }
+        // if (this->rashomon_flag) {
+        //     if (std::get<1>(* iterator) > task.rashomon_bound()) { continue; }
+        // }
+        // else if (std::get<1>(* iterator) > task.upperscope()) { continue; }
+        if (std::get<1>(* iterator) > task.upperscope()) {
+            // std::cout << "Child lower bound: " << std::get<1>(* iterator) << " Task upper scope: " << task.upperscope() << std::endl;
+             continue; }
         if (std::get<2>(* iterator) < upper) { optimal_feature = std::get<0>(* iterator); }
         lower = std::min(lower, std::get<1>(* iterator));
         upper = std::min(upper, std::get<2>(* iterator));
@@ -249,7 +269,9 @@ void Optimizer::signal_exploiters(adjacency_accessor & parents, Task & self, uns
 bool Optimizer::update_root(float lower, float upper) {
     bool change = lower != this -> global_lowerbound || upper != this -> global_upperbound;
     this -> global_lowerbound = lower;
-    this -> global_upperbound = upper;
+    if (this->rashomon_flag) { this -> global_upperbound = this -> rashomon_bound; }
+    else { this -> global_upperbound = upper; }
+    
     this -> global_lowerbound = std::min(this -> global_upperbound, this -> global_lowerbound);
     this -> global_boundary = global_upperbound - global_lowerbound;
     return change;

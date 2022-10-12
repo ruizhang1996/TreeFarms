@@ -6,6 +6,7 @@
 #include "optimizer/diagnosis/tree.hpp"
 #include "optimizer/dispatch/dispatch.hpp"
 #include "optimizer/extraction/models.hpp"
+#include "optimizer/extraction/rash_models.hpp"
 
 Optimizer::Optimizer(void) {
     return;
@@ -22,6 +23,15 @@ void Optimizer::load(std::istream & data_source) { State::initialize(data_source
 
 void Optimizer::reset(void) { State::reset(); }
 
+void Optimizer::reset_except_dataset(void) { 
+    active = true;
+    State::reset_except_dataset();
+}
+
+void Optimizer::set_rashomon_flag(void) { this -> rashomon_flag = true; }
+void Optimizer::set_rashomon_bound(float bound) { this -> rashomon_bound = bound; }
+
+
 void Optimizer::initialize(void) {
     // Initialize Profile Output
     if (Configuration::profile != "") {
@@ -36,10 +46,10 @@ void Optimizer::initialize(void) {
 
     int const n = State::dataset.height();
     int const m = State::dataset.width();
-
     // Enqueue for exploration
     State::locals[0].outbound_message.exploration(Tile(), Bitmask(n, true, NULL, Configuration::depth_budget), Bitmask(m, true), 0, std::numeric_limits<float>::max());
     State::queue.push(State::locals[0].outbound_message);
+
     return;
 }
 
@@ -47,6 +57,7 @@ void Optimizer::initialize(void) {
 void Optimizer::objective_boundary(float * lowerbound, float * upperbound) const {
     * lowerbound = this -> global_lowerbound;
     * upperbound = this -> global_upperbound;
+
 }
 
 float Optimizer::uncertainty(void) const {
@@ -75,6 +86,7 @@ unsigned int Optimizer::size(void) const {
 
 bool Optimizer::iterate(unsigned int id) {
     bool update = false;
+
     if (State::queue.pop(State::locals[id].inbound_message)) {
         update = dispatch(State::locals[id].inbound_message, id);
         switch (State::locals[id].inbound_message.code) {
@@ -82,7 +94,6 @@ bool Optimizer::iterate(unsigned int id) {
             case Message::exploitation_message: { this -> exploit += 1; break; }
         }
     }
-
     // Worker 0 is responsible for managing ticks and snapshots
     if (id == 0) {
         this -> ticks += 1;
@@ -97,6 +108,13 @@ bool Optimizer::iterate(unsigned int id) {
             this -> active = !complete() && !timeout() && (Configuration::worker_limit > 1 || State::queue.size() > 0);
             this -> print();
             this -> profile();
+        }
+        
+        std::vector<int> memory_checkpoint = Configuration::memory_checkpoints;
+        if (rashomon_flag && exported_idx < memory_checkpoint.size() && getCurrentRSS() > memory_checkpoint[exported_idx] * 1000000) {
+            export_models(std::to_string(memory_checkpoint[exported_idx]));
+            exported_idx++;
+            std::cout << "Memory usage after extraction: " << getCurrentRSS() / 1000000 << std::endl;
         }
     }
     return this -> active;
@@ -130,12 +148,41 @@ void Optimizer::profile(void) {
     }
 }
 
+void Optimizer::export_models(std::string suffix) {
+    if (Configuration::rashomon_trie != "") {
+        std::unordered_set< Model > models;
+        this->models(models);
+        bool calculate_size = false;
+        char const *type = "node";
+        Trie* tree = new Trie(calculate_size, type);
+        tree->insert_root();
+        for (auto iterator = models.begin(); iterator != models.end(); ++iterator) {
+            tree->insert_model(&(*iterator));
+        }
+
+        std::string serialization;
+        tree->serialize(serialization, 2);
+        // std::cout << serialization << std::endl;
+        // 
+        std::stringstream fmt;
+        fmt << Configuration::rashomon_trie << "-" << suffix;
+        std::string file_name = fmt.str();
+
+        if(Configuration::verbose) { std::cout << "Storing Models in: " << file_name << std::endl; }
+        std::ofstream out(file_name);
+        out << serialization;
+        out.close();
+        
+        State::graph.models.clear();
+    }
+}
+
 float Optimizer::cart(Bitmask const & capture_set, Bitmask const & feature_set, unsigned int id) const {
     Bitmask left(State::dataset.height());
     Bitmask right(State::dataset.height());
-    float potential, min_loss, guaranteed_min_loss, max_loss, base_info;
+    float potential, min_loss, max_loss, base_info;
     unsigned int target_index;
-    State::dataset.summary(capture_set, base_info, potential, min_loss, guaranteed_min_loss, max_loss, target_index, id);
+    State::dataset.summary(capture_set, base_info, potential, min_loss, max_loss, target_index, id);
     float base_risk = max_loss + Configuration::regularization;
 
     if (max_loss - min_loss < Configuration::regularization
@@ -157,8 +204,8 @@ float Optimizer::cart(Bitmask const & capture_set, Bitmask const & feature_set, 
 
             if (left.empty() || right.empty()) { continue; }
 
-            State::dataset.summary(capture_set, left_info, potential, min_loss, guaranteed_min_loss, max_loss, target_index, id);
-            State::dataset.summary(capture_set, right_info, potential, min_loss, guaranteed_min_loss, max_loss, target_index, id);
+            State::dataset.summary(capture_set, left_info, potential, min_loss, max_loss, target_index, id);
+            State::dataset.summary(capture_set, right_info, potential, min_loss, max_loss, target_index, id);
 
             float gain = left_info + right_info - base_info;
             if (gain > information_gain) {

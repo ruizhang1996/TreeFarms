@@ -268,7 +268,7 @@ void Dataset::subset(unsigned int feature_index, Bitmask & negative, Bitmask & p
     } //subproblems have one less depth_budget than their parent
 }
 
-void Dataset::summary(Bitmask const & capture_set, float & info, float & potential, float & min_loss, float & guaranteed_min_loss, float & max_loss, unsigned int & target_index, unsigned int id) const {
+void Dataset::summary(Bitmask const & capture_set, float & info, float & potential, float & min_loss, float & max_loss, unsigned int & target_index, unsigned int id) const {
     Bitmask & buffer = State::locals[id].columns[0];
     unsigned int * distribution; // The frequencies of each class
     distribution = (unsigned int *) alloca(sizeof(unsigned int) * depth());
@@ -292,11 +292,10 @@ void Dataset::summary(Bitmask const & capture_set, float & info, float & potenti
         }
     }
     float max_cost_reduction = 0.0;
+    float equivalent_point_loss = 0.0;
     float support = (float)(capture_set.count()) / (float)(height());
     float information = 0.0;
 
-    //calculate equivalent point loss for this capture set
-    float equivalent_point_loss = 0.0;
     for (int j = depth(); --j >= 0;) { // Class index
         // maximum cost difference across predictions
         max_cost_reduction += this -> diff_costs[j] * distribution[j];
@@ -315,47 +314,32 @@ void Dataset::summary(Bitmask const & capture_set, float & info, float & potenti
         if (prob > 0) { information += support * prob * (log(prob) - log(support)); }
     }
 
-    // use equivalent points as a guaranteed lowerbound, regardless of whether we are using a refence model to guess lower bounds
-    // (although most implications of a guessed lower bound are acceptable, we still want the guaranteed lower bound for scoping,
-    //  since we do not wish to narrow one subproblem's scope based on an overestimate for the lower bound of another subproblem)
-    guaranteed_min_loss = equivalent_point_loss;
-    
-    // because we are using floating point calculations, we might have our guaranteed_min_loss > max_loss in cases where they should be the same
-    // To avoid contradictions and maintain the invariant that guaranteed_min_loss <= max_loss, we correct for that here. 
-    // (note that min_cost is the same as max_loss)
-    if (guaranteed_min_loss > min_cost){
-        guaranteed_min_loss = min_cost;
-    }
-
-
-    if (Configuration::reference_LB){
-    //calculate reference model's error on this capture set, use as estimate for min_loss (possible overestimate)
-        float reference_model_loss = 0.0;
-        for (int j = depth(); --j >= 0;) {
-            // maximum cost difference across predictions
-            max_cost_reduction += this -> diff_costs[j] * distribution[j];
-
-            buffer = capture_set; // Set representing the captured points
-            this -> targets.at(j).bit_and(buffer, false); // Captured points with label j
-            Reference::labels[j].bit_and(buffer); // Captured points with label j classified correctly by reference model
-            reference_model_loss += this -> match_costs[j] * buffer.count(); // Calculate cost from correct classifications on j
-
-            buffer = capture_set; // Set representing the captured points
-            this -> targets.at(j).bit_and(buffer, false); // Captured points with label j
-            Reference::labels[j].bit_and(buffer, true); // Captured points with label j classified incorrectly by reference model
-            reference_model_loss += this -> mismatch_costs[j] * buffer.count(); // Calculate frequency  
-        }
-        min_loss = reference_model_loss; 
-    } else {
-        // when not using a reference model, we do not want min_loss to be an overestimate
-        // so we set min_loss to match guaranteed_min_loss
-        min_loss = guaranteed_min_loss;
-    }
-
     potential = max_cost_reduction;
+    min_loss = equivalent_point_loss;
     max_loss = min_cost;
     info = information;
     target_index = cost_minimizer;
+}
+
+void Dataset::get_TP_TN(Bitmask const & capture_set, unsigned int id, unsigned int target_index, unsigned int & TP, unsigned int & TN) {
+    Bitmask & buffer = State::locals[id].columns[0];
+
+    buffer = capture_set; // Set representing the captured points
+    this -> targets.at(target_index).bit_and(buffer); // Captured points with label j
+    unsigned int true_count = buffer.count(); // Calculate frequency
+    
+    if (target_index == 1) {
+        TP = true_count;
+        TN = 0;
+    } else {
+        TP = 0;
+        TN = true_count;
+    }
+}
+
+void Dataset::get_total_P_N(unsigned int & P, unsigned int & N) {
+    P = targets.at(1).count();
+    N = targets.at(0).count();
 }
 
 // Assume that data is already of the right size
@@ -363,6 +347,10 @@ void Dataset::tile(Bitmask const & capture_set, Bitmask const & feature_set, Til
     tile.content() = capture_set;
     tile.width(0);
     return;
+}
+
+float Dataset::get_mismatch_cost() const {
+    return mismatch_costs[0];
 }
 
 

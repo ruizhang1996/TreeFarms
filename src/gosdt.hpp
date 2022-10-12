@@ -1,21 +1,21 @@
 #ifndef GOSDT_H
 #define GOSDT_H
 
+#include "graph.hpp"
 #define SIMDPP_ARCH_X86_SSE4_1
 
 #include <iostream>
 
 #include <thread>
-//#include <pthread.h>
-//#include <sched.h>
-//#include <unistd.h>
+// #include <pthread.h>
+// #include <sched.h>
+// #include <unistd.h>
 #include <chrono>
 
-//#include <boost/dynamic_bitset.hpp>
 #include <vector>
 #include <string>
 
-//#include <alloca.h>
+// #include <alloca.h>
 
 #include <json/json.hpp>
 
@@ -38,19 +38,18 @@ class GOSDT {
         static unsigned int size;
         static unsigned int iterations;
         static unsigned int status;
-        static double lower_bound;
-        static double upper_bound;
-        static float model_loss; //loss of tree(s) returned
-
-        static float  ru_utime;         /* user CPU time used */
-        static float  ru_stime;         /* system CPU time used */
-        static long   ru_maxrss;        /* maximum resident set size in KB */
-        static long   ru_nswap;         /* swaps */
-        static long   ru_nivcsw;        /* involuntary context switches */
 
         // @param config_source: string stream containing a JSON object of configuration parameters
         // @note: See the Configuration class for details about each parameter
         static void configure(std::istream & config_source);
+
+        // @require: The CSV must contain a header.
+        // @require: Scientific notation is currently not supported by the parser, use long form decimal notation
+        // @require: All rows must have the same number of entries
+        // @require: all entries are comma-separated
+        // @require: Wrapping quotations are not stripped
+        // @param data_source: string containing a CSV of training_data
+        void fit(std::istream & data_source);
 
         // @require: The CSV must contain a header.
         // @require: Scientific notation is currently not supported by the parser, use long form decimal notation
@@ -67,8 +66,17 @@ class GOSDT {
         // @require: all entries are comma-separated
         // @require: Wrapping quotations are not stripped
         // @param data_source: string containing a CSV of training_data
-        // @modifies models: Set of models extracted from the optimization
-        void fit(std::istream & data_source, std::unordered_set< Model > & models);
+        // @modifies results: Set of models extracted from the optimization
+        void fit(std::istream & data_source, results_t & results);
+
+        // for Rashomon set construction
+        // @param rashomon_bound: 
+        void fit_rashomon(Optimizer & optimizer, float rashomon_bound, results_t &results);
+        void process_rashomon_result(results_t &results);
+
+        // for finding the optimal tree
+        void fit_gosdt(Optimizer & optimizer, std::unordered_set< Model > & models);
+
     private:
         // @param id: The worker ID of the current thread
         // @param optimizer: optimizer object which will assign work to the thread

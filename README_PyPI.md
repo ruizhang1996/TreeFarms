@@ -1,15 +1,21 @@
-# Fast Sparse Decision Tree Optimization via Reference Ensembles
+# Exploring the Whole Rashomon Set of Sparse Decision Trees (TreeFARMS)
 
-This code creates optimized sparse decision trees. It is a direct competitor of CART[[3](#related-work)] and C4.5 [[6](#related-work)], as well as DL8.5[[1](#related-work)], BinOct[[7](#related-work)], and OSDT[[4](#related-work)]. Its advantage over CART and C4.5 is that the trees are globally optimized, not constructed just from the top down. This makes it slower than CART, but it provides better solutions. On the other hand, it tends to be faster than other optimal decision tree methods because it uses bounds to limit the search space, and uses a black box model (a boosted decision tree) to “guess” information about the optimal tree. It takes only seconds or a few minutes on most datasets.
+This code creates *Rashomon sets* of decision trees. The Rashomon set is the set of all almost-optimal models. This code is able to enumerate the Rashomon set for sparse decision trees. In other words, instead of returning a single optimal decision tree, it returns a set of decision trees with an objective (misclassification loss with a penalty on the number of leaves) below a pre-defined threshold. To learn more about TreeFARMS, please read our [research paper](https://arxiv.org/abs/2209.08040) (published at NeurIPS'22). 
 
-To make it run faster, please use the options to limit the depth of the tree, and increase the regularization parameter above 0.02. If you run the algorithm without a depth constraint or set the regularization too small, it will run more slowly.
+Given the Rashomon set enumerated by this code, an interactive tool [TimberTrek](https://github.com/poloclub/timbertrek) can be used to visualize and explore this set of trees. 
 
-This work builds on a number of innovations for scalable construction of optimal tree-based classifiers: Scalable Bayesian Rule Lists[[8](#related-work)], CORELS[[2](#related-work)], OSDT[[4](#related-work)], and, most closely, GOSDT[[5](#related-work)]. 
+To make TreeFARMS run faster, please use the options to limit the depth of the tree, and increase the regularization parameter above 0.02. If you run the algorithm without a depth constraint or set the regularization too small, it will run more slowly.
+
+TreeFARMS builds on a number of innovations for scalable construction of optimal tree-based classifiers: Scalable Bayesian Rule Lists[[8](#related-work)], CORELS[[2](#related-work)], OSDT[[4](#related-work)], and, most closely, GOSDT[[5](#related-work)]. 
+
+**Note: this repository is built based on [Fast Sparse Decision Tree Optimization via Reference Ensembles](https://github.com/ubc-systopia/gosdt-guesses). Package is renamed to allow the installation of both packages. In this repository, all references to GOSDT refers TreeFARMS algorithm.**
 
 # Table of Content
 - [Installation](#installation)
+- [Compilation](#compilation)
 - [Configuration](#configuration)
 - [Example](#example)
+- [Repository Structure](#structure)
 - [License](#license)
 - [FAQs](#faqs)
 
@@ -17,49 +23,66 @@ This work builds on a number of innovations for scalable construction of optimal
 
 # Installation
 
-You may use the following commands to install GOSDT along with its dependencies on macOS, Ubuntu and Windows.  
-You need **Python 3.7 or later** to use the module `gosdt` in your project.
+You may use the following commands to install TreeFARMS along with its dependencies on macOS, Ubuntu and Windows.  
+You need **Python 3.7 or later** to use the module `treefarms` in your project. If you encountered an error `ERROR: Could not find a version that satisfies the requirement treefarms`, try updating your pip to the latest version. 
 
 ```bash
 pip3 install attrs packaging editables pandas sklearn sortedcontainers gmpy2 matplotlib
-pip3 install gosdt
+pip3 install treefarms
 ```
+
+You can find a list of available wheels on [PyPI](https://pypi.org/project/treefarms/).  
+Please feel free to open an issue if you do not see your distribution offered.
+
+---
+
+# Compilation
+
+Please refer to the [manual](doc/build.md) to build the C++ command line interface and the Python extension module and run the experiment with example datasets on your machine.
+
 ---
 
 # Configuration
 
 The configuration is a JSON object and has the following structure and default values:
 ```json
-{ 
-  "regularization": 0.05,
-  "depth_budget": 0,
-  "reference_LB": false, 
-  "path_to_labels": "",
-  "time_limit": 0,
-  "uncertainty_tolerance": 0.0,
-  "upperbound": 0.0,
-  "worker_limit": 1,
-  "stack_limit": 0,
-  "precision_limit": 0,
-  "model_limit": 1,
-  "verbose": false,
-  "diagnostics": false,
-  "balance": false,
-  "look_ahead": true,
-  "similar_support": true,
-  "cancellation": true,
-  "continuous_feature_exchange": false,
-  "feature_exchange": false,
-  "feature_transform": true,
-  "rule_list": false,
-  "non_binary": false,
-  "costs": "",
-  "model": "",
-  "timing": "",
-  "trace": "",
-  "tree": "",
-  "profile": ""
-}
+{
+  
+    "regularization": 0.05,
+    "rashomon": true, 
+    "rashomon_bound_multiplier": 0.05,
+
+    "rashomon_bound": 0,
+    "rashomon_bound_adder": 0,
+    "output_accuracy_model_set": false, 
+    "output_covered_sets": [],
+    "covered_sets_thresholds": [],
+    "rashomon_model_set_suffix": "",
+    "rashomon_ignore_trivial_extensions": true,
+    "rashomon_trie": "",
+  
+    "depth_budget": 0,
+    "uncertainty_tolerance": 0.0,
+    "upperbound": 0.0,
+    "precision_limit": 0,
+    "stack_limit": 0,
+    "tile_limit": 0,
+    "time_limit": 0,
+    "worker_limit": 1,
+    "minimum_captured_points": 0,
+    "cancellation": true,
+    "look_ahead": true,
+    "diagnostics": false,
+    "verbose": true,
+    "costs": "",
+    "model": "",
+    "profile": "",
+    "timing": "",
+    "trace": "",
+    "tree": "",
+    "datatset_encoding": "",
+    "memory_checkpoints": [],
+  }
 ```
 
 ## Key parameters
@@ -72,45 +95,64 @@ The configuration is a JSON object and has the following structure and default v
    ```
  - Default: 0.05
  - **Note: We highly recommend setting the regularization to a value larger than 1/num_samples. A small regularization could lead to a longer training time. If a smaller regularization is preferred, you must set the parameter `allow_small_reg` to true, which by default is false.**
-
-**allow_small_reg**
+ 
+**rashomon**
 - Values: true or false
-- Description: Flag for allowing regularization < 1/n , where n = num_samples (if false, regularizations below 1/n are automatically set to 1/n)
-- Default: false
+- Description: Enables extraction of Rashomon set. Setting it to false allows extracting only the optimal tree, allowing a more flexible way of setting Rashomon bound. Note: obtaining the optimal objective value is currently not supported in Python API.
+- Default: true
 
-**depth_budget**
-- Values: Integers >= 1
-- Description: Used to set the maximum tree depth for solutions, counting a tree with just the root node as depth 1. 0 means unlimited.
-- Default: 0
-
-**reference_LB**
- - Values: true or false
- - Description: Enables using a vector of misclassifications from another (reference) model to lower bound our own misclassifications
- - Default: false
- - Note: If `reference_LB` is set to true, you must provide a valid `path_to_labels`. 
-
-**path_to_labels**
-- Values: String representing a path to a file. 
-- Description: This file must be a single-column csv representing a class prediction for each training observation (in the same order as for the training data, using the same class labels as for the training data, and predicting each class present in the training set at least once across all training points). Typically this csv is obtained by fitting a [gradient boosted decision tree](https://scikit-learn.org/stable/modules/generated/sklearn.ensemble.GradientBoostingClassifier.html) model on the training data, and saving its training set predictions as a csv file. 
-- Example for a dataset with classes 1 and 0: 
-     ```
-     predicted_class
-     0
-     1
-     1
-     1
-     0
-     ```
-- Default: Emptry string
-
-**time_limit**
- - Values: Decimal greater than or equal to 0
- - Description: A time limit upon which the algorithm will terminate. If the time limit is reached, the algorithm will terminate with an error.
- - Special Cases: When set to 0, no time limit is imposed.
- - Default: 0
-
+**rashomon_bound_multiplier**
+- Values: Decimal > 0
+- Description: Used to set the Rashomon bound. Rashomon bound = (1 + rashomon_bound_multiplier) * optimal objective value. Mutually exclusive with `rashomon_bound` and `rashomon_bound_adder`.
+- Default: 0.05
+- **Warning: The size of Rashomon set increasing exponentially w.r.t. this argument.**
 
 ## More parameters
+### Rashomon-specific configs
+**rashomon_bound**
+- Values: Decimal > 0
+- Description: Used to set the Rashomon bound. Directly setting the Rashomon bound if it is known. Mutually exclusive with `rashomon_bound_multiplier` and `rashomon_bound_adder`.
+- Default: 0
+- **Warning: The size of Rashomon set increasing exponentially w.r.t. this argument.**
+
+**rashomon_bound_adder**
+- Values: Decimal > 0
+- Description: Used to set the Rashomon bound. Rashomon bound = rashomon_bound_adder + optimal objective value. Mutually exclusive with `rashomon_bound` and `rashomon_bound_multiplier`.
+- Default: 0
+- **Warning: The size of Rashomon set increasing exponentially w.r.t. this argument.**
+
+**output_accuracy_model_set**
+ - Values: true or false
+ - Description: Enables outputting the Rashomon set with accuracy metric in a file named by `model_set-accuracy-` with the suffix indicated in `rashomon_model_set_suffix`. Note that it is not required for Python API to obtain the accuracy Rashomon set.
+ - Default: false
+
+**output_covered_sets**
+ - Values: an array of string in `['f1', 'bacc', 'auc']`.
+ - Description: Enables outputting the Rashomon set with given metric in a file named by `model_set-[metric]-` with the suffix indicated in `rashomon_model_set_suffix`. 
+ - Default: []
+
+**covered_sets_thresholds**
+ - Values: an array of Decimals.
+ - Description: Sets the extraction threshold of given metric. 
+ - Default: []
+
+**rashomon_model_set_suffix**
+ - Values: string representing a suffix of a file.
+ - Description: Sets file suffix for outputted model sets.
+ - Special Cases: None. Disable outputting to files by setting above config correspondingly. With an empty value the program still attempts to produce a file without suffix.
+ - Default: Empty string
+
+**rashomon_ignore_trivial_extensions**
+ - Values: true or false
+ - Description: Enables ignoring trivial splits, or terminal splits that does not improve accuracy.
+ - Default: true
+
+**rashomon_trie**
+ - Values: string representing a path to a file.
+ - Description: The output model set will be converted to trie representation, and be written to this file.
+ - Special Case: When set to empty string, no trie will be stored.
+ - Default: Empty string
+
 ### Flag
 
 **balance**
@@ -130,7 +172,7 @@ The configuration is a JSON object and has the following structure and default v
 
 **similar_support**
  - Values: true or false
- - Description: Enables the similar support bound imeplemented via the distance index
+ - Description: Enables the similar support bound implemented via the distance index
  - Default: true
 
 **feature_exchange**
@@ -185,12 +227,17 @@ The configuration is a JSON object and has the following structure and default v
  - Default: 0.0
 
 ### Limits
+
+**depth_budget**
+- Values: Integers >= 1
+- Description: Used to set the maximum tree depth for solutions, counting a tree with just the root node as depth 1. 0 means unlimited.
+- Default: 0
  
-**model_limit**
+**time_limit**
  - Values: Decimal greater than or equal to 0
- - Description: The maximum number of models that will be extracted into the output.
- - Special Cases: When set to 0, no output is produced.
- - Default: 1
+ - Description: A time limit upon which the algorithm will terminate. If the time limit is reached, the algorithm will terminate with an error.
+ - Special Cases: When set to 0, no time limit is imposed.
+ - Default: 0
 
 **precision_limit**
  - Values: Decimal greater than or equal to 0
@@ -203,7 +250,6 @@ The configuration is a JSON object and has the following structure and default v
  - Description: The maximum number of bytes considered for use when allocating local buffers for worker threads.
  - Special Cases: When set to 0, all local buffers will be allocated from the heap.
  - Default: 0
-
 
 **worker_limit**
  - Values: Decimal greater than or equal to 1
@@ -233,176 +279,66 @@ The configuration is a JSON object and has the following structure and default v
      ```
    - Note: costs values are not normalized, so high cost values lower the relative weight of regularization
  - Special Case: When set to empty string, a default cost matrix is used which represents unweighted training misclassification.
- - Default: Emptry string
+ - Default: Empty string
 
 **model**
  - Values: string representing a path to a file.
  - Description: The output models will be written to this file.
  - Special Case: When set to empty string, no model will be stored.
- - Default: Emptry string
+ - Default: Empty string
 
 **profile**
  - Values: string representing a path to a file.
  - Description: Various analytics will be logged to this file.
  - Special Case: When set to empty string, no analytics will be stored.
- - Default: Emptry string
+ - Default: Empty string
 
 **timing**
  - Values: string representing a path to a file.
  - Description: The training time will be appended to this file.
  - Special Case: When set to empty string, no training time will be stored.
- - Default: Emptry string
+ - Default: Empty string
 
 **trace**
  - Values: string representing a path to a directory.
  - Description: snapshots used for trace visualization will be stored in this directory
  - Special Case: When set to empty string, no snapshots are stored.
- - Default: Emptry string
+ - Default: Empty string
 
 **tree**
  - Values: string representing a path to a directory.
  - Description: snapshots used for trace-tree visualization will be stored in this directory
  - Special Case: When set to empty string, no snapshots are stored.
- - Default: Emptry string
+ - Default: Empty string
 
 ---
 # Example
 
-The [https://github.com/ubc-systopia/gosdt-guesses/](GOSDT source code repository) contains example code and datasets to
-run GOSDT with threshold guessing, lower bound guessing, and depth limits.
-The example python file is available in [https://github.com/ubc-systopia/gosdt-guesses/gosdt/example.py](example.py). A tutorial ipython notebook is available in [https://github.com/ubc-systopia/gosdt-guesses/gosdt/tutorial.ipynb](tutorial.ipynb).  
-
-The script below will run only if you clone the git repo and run there, however,
-it should serve as an example for how to use gosdt.
-```
-import pandas as pd
-import numpy as np
-import time
-import pathlib
-from sklearn.ensemble import GradientBoostingClassifier
-from model.threshold_guess import compute_thresholds
-from model.gosdt import GOSDT
-
-# read the dataset
-df = pd.read_csv("experiments/datasets/fico.csv")
-X, y = df.iloc[:,:-1].values, df.iloc[:,-1].values
-h = df.columns[:-1]
-
-# GBDT parameters for threshold and lower bound guesses
-n_est = 40
-max_depth = 1
-
-# guess thresholds
-X = pd.DataFrame(X, columns=h)
-print("X:", X.shape)
-print("y:",y.shape)
-X_train, thresholds, header, threshold_guess_time = compute_thresholds(X, y, n_est, max_depth)
-y_train = pd.DataFrame(y)
-
-# guess lower bound
-start_time = time.perf_counter()
-clf = GradientBoostingClassifier(n_estimators=n_est, max_depth=max_depth, random_state=42)
-clf.fit(X_train, y_train.values.flatten())
-warm_labels = clf.predict(X_train)
-elapsed_time = time.perf_counter() - start_time
-lb_time = elapsed_time
-
-# save the labels from lower bound guesses as a tmp file and return the path to it.
-labelsdir = pathlib.Path('/tmp/warm_lb_labels')
-labelsdir.mkdir(exist_ok=True, parents=True)
-labelpath = labelsdir / 'warm_label.tmp'
-labelpath = str(labelpath)
-pd.DataFrame(warm_labels, columns=["class_labels"]).to_csv(labelpath, header="class_labels",index=None)
-
-
-# train GOSDT model
-config = {
-            "regularization": 0.001,
-            "depth_budget": 5,
-            "warm_LB": True,
-            "path_to_labels": labelpath,
-            "time_limit": 60,
-            "similar_support": False
-        }
-
-model = GOSDT(config)
-
-model.fit(X_train, y_train)
-
-print("evaluate the model, extracting tree and scores", flush=True)
-
-# get the results
-train_acc = model.score(X_train, y_train)
-n_leaves = model.leaves()
-n_nodes = model.nodes()
-time = model.utime
-
-print("Model training time: {}".format(time))
-print("Training accuracy: {}".format(train_acc))
-print("# of leaves: {}".format(n_leaves))
-print(model.tree)
-```
-
-**Output**
-
-```
-X: (10459, 23)
-y: (10459,)
-gosdt reported successful execution
-training completed. 1.658/0.098/1.756 (user, system, wall), mem=364 MB
-bounds: [0.290914..0.290914] (0.000000) loss=0.282914, iterations=13569
-evaluate the model, extracting tree and scores
-Model training time: 1.6584229469299316
-Training accuracy: 0.7170857634573095
-# of leaves: 8
-if ExternalRiskEstimate<=67.5 = 1 and MSinceMostRecentInqexcl7days<=-7.5 = 1 then:
-    predicted class: 1
-    misclassification penalty: 0.027
-    complexity penalty: 0.001
-
-else if ExternalRiskEstimate<=67.5 != 1 and MSinceMostRecentInqexcl7days<=-7.5 = 1 then:
-    predicted class: 0
-    misclassification penalty: 0.006
-    complexity penalty: 0.001
-
-else if ExternalRiskEstimate<=74.5 = 1 and MSinceMostRecentInqexcl7days<=-7.5 != 1 and MSinceMostRecentInqexcl7days<=0.5 = 1 and PercentTradesWBalance<=80.5 = 1 then:
-    predicted class: 1
-    misclassification penalty: 0.071
-    complexity penalty: 0.001
-
-else if ExternalRiskEstimate<=74.5 != 1 and MSinceMostRecentInqexcl7days<=-7.5 != 1 and MSinceMostRecentInqexcl7days<=0.5 = 1 and PercentTradesWBalance<=80.5 = 1 then:
-    predicted class: 0
-    misclassification penalty: 0.061
-    complexity penalty: 0.001
-
-else if ExternalRiskEstimate<=78.5 = 1 and MSinceMostRecentInqexcl7days<=-7.5 != 1 and MSinceMostRecentInqexcl7days<=0.5 = 1 and PercentTradesWBalance<=80.5 != 1 then:
-    predicted class: 1
-    misclassification penalty: 0.033
-    complexity penalty: 0.001
-
-else if ExternalRiskEstimate<=78.5 != 1 and MSinceMostRecentInqexcl7days<=-7.5 != 1 and MSinceMostRecentInqexcl7days<=0.5 = 1 and PercentTradesWBalance<=80.5 != 1 then:
-    predicted class: 0
-    misclassification penalty: 0.005
-    complexity penalty: 0.001
-
-else if ExternalRiskEstimate<=67.5 = 1 and MSinceMostRecentInqexcl7days<=-7.5 != 1 and MSinceMostRecentInqexcl7days<=0.5 != 1 then:
-    predicted class: 1
-    misclassification penalty: 0.026
-    complexity penalty: 0.001
-
-else if ExternalRiskEstimate<=67.5 != 1 and MSinceMostRecentInqexcl7days<=-7.5 != 1 and MSinceMostRecentInqexcl7days<=0.5 != 1 then:
-    predicted class: 0
-    misclassification penalty: 0.054
-    complexity penalty: 0.001
-```
+Example code to run TreeFARMS with threshold guessing, lower bound guessing, and depth limit. The example python file is available in [treefarms/example.py](/treefarms/example.py). A tutorial ipython notebook is available in [treefarms/tutorial.ipynb](/treefarms/tutorial.ipynb).  
 
 ---
+
+# Structure
+
+This repository contains the following directories and files:
+- **.github**: Configurations for GitHub action runners.
+- **doc**: Documentation
+- **experiments**: Datasets and their configurations to run experiments
+- **treefarms**: Jupyter notebook, Python implementation and wrappers around C++ implementation
+- **include**: Required 3rd-party header-only libraries
+- **log**: Log files
+- **src**: Source files for C++ implementation and Python binding
+- **test**: Source files for unit tests
+- **build.py**: Python script that builds the project automatically
+- **CMakeLists.txt**: Configuration file for the CMake build system
+- **pyproject.toml**: Configuration file for the SciKit build system
+- **setup.py**: Python script that builds the wheel file
 
 ---
 
 # FAQs
 
-If you run into any issues when running GOSDT, consult the [**FAQs**](https://github.com/ubc-systopia/gosdt-guesses/doc/faqs.md) first. 
+If you run into any issues when running TreeFARMS, consult the [**FAQs**](/doc/faqs.md) first. 
 
 ---
 

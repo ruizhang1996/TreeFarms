@@ -27,7 +27,7 @@ public:
 
     // @param capture_set: indicator for which data points are captured
     // @param feature_set: indicator for which features are still active
-    Task(Bitmask const & capture_set, Bitmask const & feature_set, unsigned int id);
+    Task(Bitmask const & capture_set, Bitmask const & feature_set, unsigned int id, bool rashomon_flag = false);
 
     // @returns the support of the this task
     float support(void) const;
@@ -35,17 +35,17 @@ public:
     // @returns the objective lowerbound of this task
     float lowerbound(void) const;
 
-    // @returns the lowerbound, without allowing the use of guesses for the lower bound 
-    // (which could be overestimates). Currently, only differs from lowerbound() 
-    // if Configuration::warm_LB is true. 
-    double guaranteed_lowerbound(void);
-
     // @return the objective upperbound of this task
     float upperbound(void) const;
 
     float lowerscope(void) const;
     float upperscope(void) const;
     void scope(float new_scope);
+
+    float rashomon_bound(void) const;
+    void set_rashomon_flag(void);
+    void set_rashomon_bound(float);
+
 
     // @return the objective optimality gap of this task
     float uncertainty(void) const;
@@ -89,6 +89,7 @@ public:
 
     // observer method used for debugging
     std::string inspect(void) const;
+    float maximum_scope = 0;
 private:
     Tile _identifier;
     Bitmask _capture_set;
@@ -103,10 +104,6 @@ private:
     float _lowerbound = -std::numeric_limits<float>::max();
     float _upperbound = std::numeric_limits<float>::max();
 
-    // When Configuration::reference_LB is true, _lowerbound is no longer a provable lower bound
-    // we use the below variable to track a provable lower bound in this case. 
-    float _guaranteed_lowerbound = -std::numeric_limits<float>::max(); 
-
     float _context_lowerbound = 0.0;
     float _context_upperbound = 0.0;
 
@@ -114,7 +111,11 @@ private:
     float _upperscope = std::numeric_limits<float>::max();
     float _coverage = -std::numeric_limits<float>::max();
 
+    float _rashomon_bound = std::numeric_limits<float>::max();
+
     int _optimal_feature = -1; // Feature index set if part of the oracle model
+
+    bool _rashomon_flag = false; // 
 };
 
 #endif

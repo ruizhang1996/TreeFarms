@@ -17,18 +17,23 @@
 #include <tbb/tick_count.h>
 #include <json/json.hpp>
 
-//#include <alloca.h>
+// #include <alloca.h>
 
 #include "configuration.hpp"
 #include "dataset.hpp"
+// #include "sorted_map.hpp"
 #include "model.hpp"
+#include "model_set.hpp"
 #include "task.hpp"
 #include "types.hpp"
 #include "graph.hpp"
 #include "queue.hpp"
+#include "trie.hpp"
+#include "memusage.h"
 #include "integrity_violation.hpp"
 
 using json = nlohmann::json;
+
 
 class Optimizer {
 public:
@@ -39,6 +44,9 @@ public:
 
     void initialize(void);
     void reset(void);
+    void reset_except_dataset(void);
+    void set_rashomon_flag(void);
+    void set_rashomon_bound(float);
 
     // @modifies lowerbound: the lowerbound on the global objective
     // @modifies upperbound: the upperbound on the global objective
@@ -68,6 +76,9 @@ public:
     // @note: if the global optimality gap is non-zero, there is no gaurantee that results necessarily contains the optimal model
     void models(std::unordered_set< Model > & results);
 
+    // @modifies results: stores all models in Rashomon set in results
+    void rash_models(results_t & results);
+
     // Generates snapshot data for trace visualization
     void diagnostic_trace(int iteration, key_type const & focal_point);
     // Generates snapshot data for trace-tree visualization
@@ -87,6 +98,7 @@ private:
     unsigned long ticks = 0; // Number of ticks passed
     unsigned long tick_duration = 10000; // Number of iterations per tick
     bool active = true; // Flag indicating whether the optimization is still active
+    bool rashomon_flag = false; // Flag for Rashomon
 
     // Analytics State
     Tile root; // Root indicator
@@ -98,6 +110,18 @@ private:
     std::vector< unsigned int > work_distribution; // Distribution of work done for each percentile
     unsigned int explore = 0.0; // Distributtion of work from downward message
     unsigned int exploit = 0.0; // Distribution of work from upward message
+    float rashomon_bound = std::numeric_limits<float>::max(); // Bound to join the Rashomon set or not
+    bool model_limit_exceeded = false; // Indicate whether the maximum model limit is exceeded
+    long long unsigned int models_calls = 0; // Number of calls to the models() function 
+    long long unsigned int re_explore_by_scope_update_count = 0; // Number of calls to the models() function 
+    long long unsigned int re_explore_count = 0; // Number of calls to the models() function 
+    long long unsigned int pruned_combinations_with_scope = 0; // Pruned combination through comparing combined obj val with scope
+    long long unsigned int pruned_leaves_with_scope = 0; // Pruned leaves using the scope variable
+    long long unsigned int pruned_trivial_extension = 0; // Pruned leaves using the scope variable
+    std::size_t max_result_size = 0; // Maximum result size to ensure no overflow is happening
+
+    // For exporting trie based on memory usage 
+    int exported_idx = 0;
 
     float cart(Bitmask const & capture_set, Bitmask const & feature_set, unsigned int id) const;
 
@@ -124,10 +148,21 @@ private:
 
     // @param set: identifier for the root node from which to extract optimal models
     // @modifies results: internal set of extracted models
-    void models(key_type const & identifier, std::unordered_set< Model * > & results, bool leaf = false);
+    void models(key_type const & identifier, std::unordered_set< std::shared_ptr<Model> > & results, float scope = 0);
+
+    void models_inner(key_type const & identifier, std::unordered_set< std::shared_ptr<Model> > & results, float scope = 0);
+
+    void rash_models(key_type const & identifier, results_t & results, float scope = 0);
+
+    void rash_models_inner(key_type const & identifier, results_t & results, float scope = 0);
+
+    void insert_leaf_to_results(results_t & results, model_set_p & model);
 
     void print(void) const;
     void profile(void);
+    
+    // Export models based on current adjacency graph
+    void export_models(std::string suffix);
 
     // Diagnostics
     bool diagnose_non_convergence(key_type const & set);

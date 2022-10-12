@@ -37,7 +37,7 @@ public:
     ~Model(void);
 
     // Hash generated from the leaf set of model
-    size_t const hash(void) const;
+    size_t hash(void) const;
 
     void identify(key_type const & indentifier);
     bool identified(void);
@@ -51,7 +51,7 @@ public:
     // @returns true if the two models are provably equivalent
     // @note the equality comparison assumes that leaf bitmasks are not duplicated
     //       this assumes that identical bitmasks are only copy by reference, not by value
-    bool const operator==(Model const & other) const;
+    bool operator==(Model const & other) const;
 
     // @param sample: bitmask of binary features (encoded) used to make the prediction
     // @modifies prediction: string representation of the class that is predicted
@@ -80,10 +80,22 @@ public:
     key_type identifier; // Identifier for association to graph vertex
 
     bool terminal = false; // Flag specifying whether the node is terminal
+
+    std::shared_ptr<Model> get_negative() const; // left subtree
+    std::shared_ptr<Model> get_positive() const; // right subtree
+    unsigned int get_feature() const; // index of the encoded feature
+    unsigned int get_binary_target() const; // index of the encoded prediction
+    std::string get_prediction() const; // prediction of terminal node
+
 private:
     // Addresses of the bitmasks of the leaf set
     void _partitions(std::vector< Bitmask * > & addresses) const;
     void partitions(std::vector< Bitmask * > & addresses) const;
+    
+    mutable size_t _hash = 0;
+    
+    mutable float cached_loss = -1;
+    mutable float cached_complexity = -1;
 
     // Common members for both Terminal and Non-terminal instances
     std::string name; // Name of the decoded feature or decoded target
@@ -92,7 +104,6 @@ private:
     // Non-terminal members
     unsigned int feature; // index of the decoded feature
     unsigned int binary_feature; // index of the encoded feature
-    unsigned int binary_target; // index of the encoded target
     std::string relation; // relational operator to apply to the decoded feature
     std::string reference; // reference value to compare with the decoded feature
     std::shared_ptr<Model> negative; // left subtree
@@ -102,11 +113,28 @@ private:
     translation_type positive_translator; // right subtree feature reordering
 
     // Terminal members
+    unsigned int binary_target; // index of the encoded prediction
     std::string prediction; // string representation of the predicted value
     float _loss; // loss incurred by this leaf
     float _complexity; // complexity penalty incurred by this leaf
     std::shared_ptr< Bitmask > capture_set; // indicator specifying the points captured by this leaf
 };
+
+inline std::shared_ptr<Model> Model::get_negative() const {
+    return negative;
+}; // left subtree
+inline std::shared_ptr<Model> Model::get_positive() const {
+    return positive;
+}; // right subtree
+inline unsigned int Model::get_binary_target() const {
+    return binary_target;
+}; // index of the encoded prediction
+inline std::string Model::get_prediction() const {
+    return prediction;
+}; // prediction of terminal node
+inline unsigned int Model::get_feature() const {
+    return binary_feature;
+}; // index of the encoded feature
 
 namespace std {
     template <>
